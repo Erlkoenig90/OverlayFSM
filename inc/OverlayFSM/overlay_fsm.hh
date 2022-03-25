@@ -5,7 +5,7 @@
 #include <utility>
 #include <type_traits>
 
-#if defined(__GNUC__) and !defined(overlayfsm_always_inline)
+#if defined(__GNUC__) && !defined(overlayfsm_always_inline)
 #	define overlayfsm_always_inline __attribute__((always_inline)) inline
 #endif
 
@@ -34,6 +34,10 @@ namespace OverlayFSM {
 			template<typename... Args>
 			constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
 
+			constexpr Type& get () {
+			    return const_cast<Type&> (storage);
+			}
+
 			Type storage;
 		};
 
@@ -49,6 +53,10 @@ namespace OverlayFSM {
 				::new (&storage) Type (std::forward<Args>(args)...);
 			}
 
+            constexpr Type& get () {
+                return reinterpret_cast<Type&> (const_cast<typename std::remove_const<decltype (storage)>::type&> (storage));
+            }
+
 			// Speicher für den gewünschten Typ anfordern
 			typename std::aligned_storage <sizeof(Type), std::alignment_of<Type>::value>::type storage;
 		};
@@ -59,6 +67,10 @@ namespace OverlayFSM {
 			/// Dieser Konstruktor gibt einfach nur die Argumente weiter. Da "Type" literal ist, ist Uninitalized auch literal und bietet einen constexpr-Konstruktor.
 			template<typename... Args>
 			constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
+
+            constexpr Type& get () {
+                return const_cast<Type&> (storage);
+            }
 
 			Type storage;
 		};
@@ -100,7 +112,7 @@ namespace OverlayFSM {
 			/// Liefert eine Referenz auf den angegeben Typ (falls dieser der aktive ist)
 			constexpr First& get (UnionTag<First>) {
 				// Hack: In C++11 ist der Typ "const" wegen constexpr
-				return reinterpret_cast<First&> (const_cast<typename std::remove_const<decltype (first.storage)>::type&> (first.storage));
+				return first.storage.get ();
 			}
 			
 			/// Liefert eine Referenz auf den angegeben Typ (falls dieser der aktive ist)
@@ -165,29 +177,41 @@ namespace OverlayFSM {
 	 * @param States		Die Zustandsklassen, müssen von StateBase_ ableiten
 	 */
 	template <typename StateBase_, typename... States>
-	class OverlayFSM : public Helper::MixinDestructor<OverlayFSM<StateBase_, States...>, std::is_trivially_destructible<StateBase_>::value> {
+	class OverlayFSM : public Helper::MixinDestructor<OverlayFSM<StateBase_, States...>,
+#ifdef __TASKING__
+	false> { friend class Helper::MixinDestructor<OverlayFSM<StateBase_, States...>, false>;
+#else
+	std::is_trivially_destructible<StateBase_>::value
+	> {
 		friend class Helper::MixinDestructor<OverlayFSM<StateBase_, States...>, std::is_trivially_destructible<StateBase_>::value>;
+#endif
 		public:
 			using StateBase = StateBase_;
 			
 			// Konsistenzprüfungen der Parameter
 			static_assert (sizeof...(States) > 0, "OverlayFSM must have at least one state!");
+#ifndef __TASKING__
 			static_assert (Helper::And<std::is_base_of<StateBase, States>::value...>::value, "All states must be derived from the StateBase class!");
 			static_assert (Helper::And<!std::is_abstract<States>::value...>::value, "State classes may not contain pure virtual member functions!");
+#endif
 		private:
 			Helper::MultiUnion<States...> m_memory;
 			// Zeiger auf den aktuellen Zustand; zeigt in m_stateMem hinein.
 			StateBase* m_current;
 
 			/// Ruft den Destruktor des aktuellen Zustands, auf dem Typ der Basisklasse, auf, falls er nicht-trivial ist. Tut nichts falls der Destruktor trivial ist (SFINAE).
+#ifndef __TASKING__
 			template <typename X = StateBase, class = typename std::enable_if<!std::is_trivially_destructible<X>::value>::type>
+#endif
 			void destroy () {
 				current ().~StateBase ();
 			}
 
+#ifndef __TASKING__
 			template <typename X = StateBase, class = typename std::enable_if<std::is_trivially_destructible<X>::value>::type>
 			void destroy (...) {
 			}
+#endif
 		public:
 			/**
 			 * Initialisiert die FSM mit dem gewünschten Zustand. Der erste Parameter kann einen beliebigen Wert (zB nullptr) haben,
