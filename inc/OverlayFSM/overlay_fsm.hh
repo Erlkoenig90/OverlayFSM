@@ -15,7 +15,7 @@ namespace OverlayFSM {
 		template <typename T>
 		struct UnionTag {};
 		
-	#ifdef __GNUC__
+	#if defined(__GNUC__) && !defined(__TASKING__)
 		/**
 		 * Da GCC & Clang fälschlicherweise erfordern, dass alle nicht-statischen Member einer union literal types sein müssen damit die union selbst ein literal type ist,
 		 * werden die Member in ein "Uninitialized" verpackt. Für literal types ist dies ein trivialer Wrapper, für nicht-literal types enthält Uninitialized statt des Types
@@ -35,6 +35,7 @@ namespace OverlayFSM {
 			constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
 
 			constexpr Type& get () {
+                // Hack: In C++11 ist der Typ "const" wegen constexpr
 			    return const_cast<Type&> (storage);
 			}
 
@@ -54,6 +55,7 @@ namespace OverlayFSM {
 			}
 
             constexpr Type& get () {
+                // Hack: In C++11 ist der Typ "const" wegen constexpr
                 return reinterpret_cast<Type&> (const_cast<typename std::remove_const<decltype (storage)>::type&> (storage));
             }
 
@@ -69,6 +71,7 @@ namespace OverlayFSM {
 			constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
 
             constexpr Type& get () {
+                // Hack: In C++11 ist der Typ "const" wegen constexpr
                 return const_cast<Type&> (storage);
             }
 
@@ -111,8 +114,7 @@ namespace OverlayFSM {
 			
 			/// Liefert eine Referenz auf den angegeben Typ (falls dieser der aktive ist)
 			constexpr First& get (UnionTag<First>) {
-				// Hack: In C++11 ist der Typ "const" wegen constexpr
-				return first.storage.get ();
+				return first.get ();
 			}
 			
 			/// Liefert eine Referenz auf den angegeben Typ (falls dieser der aktive ist)
