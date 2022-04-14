@@ -32,9 +32,9 @@ namespace OverlayFSM {
 		struct Uninitialized<Type, true> {
 			/// Dieser Konstruktor gibt einfach nur die Argumente weiter. Da "Type" literal ist, ist Uninitalized auch literal und bietet einen constexpr-Konstruktor.
 			template<typename... Args>
-			constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
+			overlayfsm_always_inline constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
 
-			constexpr Type& get () {
+			overlayfsm_always_inline constexpr Type& get () {
                 // Hack: In C++11 ist der Typ "const" wegen constexpr
 			    return const_cast<Type&> (storage);
 			}
@@ -47,6 +47,7 @@ namespace OverlayFSM {
 		struct Uninitialized<Type, false> {
 			/// Dieser Konstruktor erstellt die Instanz per Placement New und kann daher normalerweise nicht als constexpr genutzt werden. Uninitialized gilt dennoch als literal type.
 			template<typename... Args>
+			overlayfsm_always_inline
 	#if __cplusplus >= 201402L
 			constexpr
 	#endif
@@ -54,7 +55,7 @@ namespace OverlayFSM {
 				::new (&storage) Type (std::forward<Args>(args)...);
 			}
 
-            constexpr Type& get () {
+			overlayfsm_always_inline constexpr Type& get () {
                 // Hack: In C++11 ist der Typ "const" wegen constexpr
                 return reinterpret_cast<Type&> (const_cast<typename std::remove_const<decltype (storage)>::type&> (storage));
             }
@@ -68,9 +69,9 @@ namespace OverlayFSM {
 		struct Uninitialized {
 			/// Dieser Konstruktor gibt einfach nur die Argumente weiter. Da "Type" literal ist, ist Uninitalized auch literal und bietet einen constexpr-Konstruktor.
 			template<typename... Args>
-			constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
+			overlayfsm_always_inline constexpr Uninitialized (Args&&... args) : storage(std::forward<Args>(args)...) { }
 
-            constexpr Type& get () {
+			overlayfsm_always_inline constexpr Type& get () {
                 // Hack: In C++11 ist der Typ "const" wegen constexpr
                 return const_cast<Type&> (storage);
             }
@@ -90,36 +91,36 @@ namespace OverlayFSM {
 		template <typename First, typename... Rest>
 		union MultiUnion<First, Rest...> {
 			/// Der default constructor legt keine Instanz an
-			constexpr MultiUnion () : rest {} {}
+			overlayfsm_always_inline constexpr MultiUnion () : rest {} {}
 			
 			/// Diesem Konstruktor wird per tag-Parameter die Klasse, die erstellt weden soll, übergeben.
 			template <typename... Args>
-			constexpr MultiUnion (UnionTag<First>, Args&&... args) : first { std::forward<Args> (args) ... } {}
+			overlayfsm_always_inline constexpr MultiUnion (UnionTag<First>, Args&&... args) : first { std::forward<Args> (args) ... } {}
 			
 			/// Diesem Konstruktor wird per tag-Parameter die Klasse, die erstellt weden soll, übergeben.
 			template <typename Type, typename... Args>
-			constexpr MultiUnion (UnionTag<Type> tag, Args&&... args) : rest { tag, std::forward<Args> (args)... } {}
+			overlayfsm_always_inline constexpr MultiUnion (UnionTag<Type> tag, Args&&... args) : rest { tag, std::forward<Args> (args)... } {}
 			
 			/// Erstellt eine Instanz des angegebenen Types
 			template <typename... Args>
-			First* construct (UnionTag<First>, Args&&... args) {
+			overlayfsm_always_inline First* construct (UnionTag<First>, Args&&... args) {
 				return new (&first.storage) First (std::forward<Args> (args)...);
 			}
 			
 			/// Erstellt eine Instanz des angegebenen Types
 			template <typename Type, typename... Args>
-			Type* construct (UnionTag<Type> tag, Args&&... args) {
+			overlayfsm_always_inline Type* construct (UnionTag<Type> tag, Args&&... args) {
 				return rest.construct (tag, std::forward<Args> (args)...);
 			}
 			
 			/// Liefert eine Referenz auf den angegeben Typ (falls dieser der aktive ist)
-			constexpr First& get (UnionTag<First>) {
+			overlayfsm_always_inline constexpr First& get (UnionTag<First>) {
 				return first.get ();
 			}
 			
 			/// Liefert eine Referenz auf den angegeben Typ (falls dieser der aktive ist)
 			template <typename Type>
-			constexpr Type& get (UnionTag<Type> tag) {
+			overlayfsm_always_inline constexpr Type& get (UnionTag<Type> tag) {
 				return rest.get (tag);
 			}
 			
